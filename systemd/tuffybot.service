@@ -1,0 +1,15 @@
+[Unit]
+Description=TuffyBot Discord bot
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/projects/tuffybot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/%i/.pyenv/versions/3.11.2/bin/python /home/%i/projects/tuffybot/main.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
