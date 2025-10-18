@@ -146,40 +146,39 @@ else
       export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
     fi
     
-    # If /run/user/<uid> doesn't exist (common on headless servers), try to create it
-    # with proper permissions so systemctl --user can use it.
-    if [[ -z "${XDG_RUNTIME_DIR:-}" && ! -d "/run/user/$TARGET_UID" ]]; then
-      if sudo mkdir -p "/run/user/$TARGET_UID" 2>/dev/null && \
-         sudo chmod 700 "/run/user/$TARGET_UID" 2>/dev/null && \
-         sudo chown "$TARGET_UID:$TARGET_UID" "/run/user/$TARGET_UID" 2>/dev/null; then
-        export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
-        echo "Created runtime directory: $XDG_RUNTIME_DIR"
+    # On headless servers, the user systemd instance may not be running.
+    # Enable lingering to ensure it starts and persists.
+    if ! loginctl show-user "$TARGET_USER" &>/dev/null || \
+       [[ "$(loginctl show-user "$TARGET_USER" -p Linger --value 2>/dev/null)" != "yes" ]]; then
+      echo "Enabling lingering for user $TARGET_USER (ensures systemd --user runs)..."
+      if sudo loginctl enable-linger "$TARGET_USER" 2>/dev/null; then
+        echo "Linger enabled. Waiting for user systemd to start..."
+        sleep 2
+      else
+        echo "Warning: Could not enable linger. You may need to run: sudo loginctl enable-linger $TARGET_USER" >&2
       fi
     fi
     
-    # If XDG_RUNTIME_DIR is still unset, fall back to systemd-run
+    # Now check again for XDG_RUNTIME_DIR after enabling linger
+    if [[ -z "${XDG_RUNTIME_DIR:-}" && -d "/run/user/$TARGET_UID" ]]; then
+      export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
+    fi
+    
+    # If XDG_RUNTIME_DIR is still unset, we cannot proceed with systemctl --user
     if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
-      echo "Warning: XDG_RUNTIME_DIR not set and could not create /run/user/$TARGET_UID." >&2
-      echo "Falling back to systemd-run for enable/start operations." >&2
-      
-      if $ENABLE || $START; then
-        # Use systemd-run to invoke systemctl --user in a user context
-        if $ENABLE; then
-          systemd-run --user --scope systemctl --user enable "tuffybot@${TARGET_USER}.service" || true
-        fi
-        if $START; then
-          systemd-run --user --scope systemctl --user start "tuffybot@${TARGET_USER}.service" || true
-        fi
-      fi
-    else
-      # Normal path: XDG_RUNTIME_DIR is set
-      systemctl --user daemon-reload
-      if $ENABLE; then
-        systemctl --user enable "tuffybot@${TARGET_USER}.service"
-      fi
-      if $START; then
-        systemctl --user start "tuffybot@${TARGET_USER}.service"
-      fi
+      echo "Error: XDG_RUNTIME_DIR not set and /run/user/$TARGET_UID does not exist." >&2
+      echo "Unit file installed to $DEST_PATH, but could not enable/start it." >&2
+      echo "Please ensure you are logged in or run: sudo loginctl enable-linger $TARGET_USER" >&2
+      exit 0
+    fi
+    
+    # Normal path: XDG_RUNTIME_DIR is set
+    systemctl --user daemon-reload
+    if $ENABLE; then
+      systemctl --user enable "tuffybot@${TARGET_USER}.service"
+    fi
+    if $START; then
+      systemctl --user start "tuffybot@${TARGET_USER}.service"
     fi
   fi
 fi
