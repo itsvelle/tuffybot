@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord import AllowedMentions, ui
+from discord import AllowedMentions, ui, app_commands
 from datetime import datetime, timedelta, timezone
 
 
@@ -8,13 +8,15 @@ class UserInfoCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.hybrid_command(
+    @app_commands.command(
         name="userinfo", description="Displays detailed information about a user."
     )
-    async def userinfo(self, ctx: commands.Context, member: discord.Member = None):
+    async def userinfo(self, interaction: discord.Interaction, member: discord.Member = None):
         """Displays detailed information about a user."""
         if member is None:
-            member = ctx.author
+            member = interaction.user
+
+        ctx = await commands.Context.from_interaction(interaction)
 
         # Fetch the member to ensure up-to-date data, especially for guild members
         cached = ctx.guild.get_member(member.id) if ctx.guild else None
@@ -25,13 +27,13 @@ class UserInfoCog(commands.Cog):
             try:
                 member = await ctx.guild.fetch_member(member.id)  # roles/nick/etc.
             except discord.NotFound:
-                await ctx.send(
+                await interaction.response.send_message(
                     "Could not find the specified member in this server.",
                     ephemeral=True,
                 )
                 return
             except discord.HTTPException as e:
-                await ctx.send(
+                await interaction.response.send_message(
                     f"An error occurred while fetching member data: `{e}`",
                     ephemeral=True,
                 )
@@ -336,7 +338,7 @@ class UserInfoCog(commands.Cog):
 
         try:
             view = UserInfoView(member)
-            await ctx.send(
+            await interaction.response.send_message(
                 view=view,
                 ephemeral=False,
                 allowed_mentions=AllowedMentions(
@@ -347,7 +349,7 @@ class UserInfoCog(commands.Cog):
             import traceback
 
             traceback.print_exc()
-            await ctx.send(
+            await interaction.response.send_message(
                 f"An error occurred while creating the user info display: `{e}`",
                 ephemeral=True,
             )

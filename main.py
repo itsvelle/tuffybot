@@ -15,6 +15,7 @@ import sys
 from typing import Optional, Dict
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -39,6 +40,23 @@ class TuffyBot(commands.Bot):
         self._cog_mtimes: Dict[str, float] = {}
         # Background task that watches the cogs directory for changes
         self._cog_watcher_task: Optional[asyncio.Task] = None
+
+    async def add_cog(self, cog: commands.Cog, *, override: bool = False) -> None:
+        """Override add_cog to automatically apply allowed_contexts to all app commands."""
+        # Apply allowed_contexts to all app commands in the cog
+        for command in cog.__cog_app_commands__:
+            if isinstance(command, app_commands.Command):
+                # Only apply if not already set
+                if (
+                    not hasattr(command, "_allowed_contexts")
+                    or command._allowed_contexts is None
+                ):
+                    command.allowed_contexts = app_commands.AppCommandContext(
+                        guild=True, dm_channel=True, private_channel=True
+                    )
+
+        # Call the parent add_cog method
+        await super().add_cog(cog, override=override)
 
     async def setup_hook(self) -> None:  # called by discord.py on startup
         await self.load_cogs()

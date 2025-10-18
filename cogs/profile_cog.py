@@ -1,18 +1,19 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 
 class ProfileCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(
-        name="avatar", help="Gets the avatar of a user in various formats."
+    @app_commands.command(
+        name="avatar", description="Gets the avatar of a user in various formats."
     )
-    async def avatar(self, ctx, member: discord.Member = None):
+    async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
         """Gets the avatar of a user in various formats."""
         if member is None:
-            member = ctx.author
+            member = interaction.user
 
         formats = ["png", "jpg", "webp"]
         embed = discord.Embed(title=f"{member.display_name}'s Avatar")
@@ -27,7 +28,7 @@ class ProfileCog(commands.Cog):
                 description += f"{fmt.upper()}: Error getting format - {e}\n"
 
         embed.description = description
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):
