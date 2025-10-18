@@ -10,7 +10,7 @@ class Hello(commands.Cog):
 
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @commands.hybrid_command(name="hello", description="Says hello to you!")
+    @app_commands.command(name="hello", description="Says hello to you!")
     async def hello(self, ctx: commands.Context) -> None:
         """A simple hello command usable as both a prefix and slash command."""
         await ctx.send(f"Hello, {ctx.author.mention} 👋")
