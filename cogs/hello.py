@@ -1,19 +1,17 @@
 from discord.ext import commands
-from discord import app_commands
+from discord import app_commands, Interaction
 
 
 class Hello(commands.Cog):
-    """A simple hello world cog with a hybrid command."""
+    """A simple hello world cog with a slash command."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.allowed_installs(guilds=True, users=True)
-    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.command(name="hello", description="Says hello to you!")
-    async def hello(self, ctx: commands.Context) -> None:
-        """A simple hello command usable as both a prefix and slash command."""
-        await ctx.send(f"Hello, {ctx.author.mention} 👋")
+    async def hello(self, interaction: Interaction) -> None:
+        """A simple hello command usable as a slash command."""
+        await interaction.response.send_message(f"Hello, {interaction.user.mention} 👋")
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
