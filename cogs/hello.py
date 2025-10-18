@@ -8,6 +8,7 @@ class Hello(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.command(name="hello", description="Says hello to you!")
     async def hello(self, interaction: Interaction) -> None:
         """A simple hello command usable as a slash command."""
