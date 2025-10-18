@@ -6,6 +6,7 @@ Responsibilities:
 - Read DISCORD_TOKEN from a `.env` file
 - Sync application (slash) commands on startup
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,21 +23,27 @@ def get_token() -> str:
     load_dotenv()
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        raise RuntimeError("DISCORD_TOKEN not found in environment. Please add it to a .env file.")
+        raise RuntimeError(
+            "DISCORD_TOKEN not found in environment. Please add it to a .env file."
+        )
     return token
 
 
 class TuffyBot(commands.Bot):
     def __init__(self, command_prefix: str = "!") -> None:
         intents = discord.Intents.all()
-        super().__init__(command_prefix=command_prefix, intents=intents, help_command=None)
+        super().__init__(
+            command_prefix=command_prefix, intents=intents, help_command=None
+        )
 
     async def setup_hook(self) -> None:  # called by discord.py on startup
         await self.load_cogs()
         # Sync application (slash) commands to the default guilds/global namespace
         try:
             await self.tree.sync()
-        except Exception as exc:  # keep broad catch to avoid crashing on partial failures
+        except (
+            Exception
+        ) as exc:  # keep broad catch to avoid crashing on partial failures
             print(f"Warning: failed to sync app commands: {exc}")
 
     async def load_cogs(self) -> None:
