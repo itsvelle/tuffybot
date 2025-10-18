@@ -140,6 +140,18 @@ else
     fi
   else
     # normal non-root path: current user is the target user
+    # Ensure XDG_RUNTIME_DIR is set even for non-root, in case the user
+    # hasn't logged in via a session manager that would set it.
+    if [[ -z "${XDG_RUNTIME_DIR:-}" && -d "/run/user/$TARGET_UID" ]]; then
+      export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
+    fi
+    
+    # If XDG_RUNTIME_DIR is still unset, warn the user
+    if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+      echo "Warning: XDG_RUNTIME_DIR not set and /run/user/$TARGET_UID does not exist." >&2
+      echo "This may indicate you are not logged in to a session. Try logging in or using systemd-run." >&2
+    fi
+    
     systemctl --user daemon-reload
     if $ENABLE; then
       systemctl --user enable "tuffybot@${TARGET_USER}.service"
