@@ -41,6 +41,31 @@ done
 
 CURRENT_USER="$(id -un)"
 
+# Determine the target user for user-mode installs. If the script is run as root
+# and SUDO_USER is set, prefer that user so the unit is installed into their
+# home and systemctl --user is invoked as that user. Otherwise use the current
+# effective user.
+TARGET_USER="$CURRENT_USER"
+if [[ "$MODE" == "user" && $(id -u) -eq 0 ]]; then
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    TARGET_USER="$SUDO_USER"
+  else
+    # No SUDO_USER: default to root (may not have a user bus)
+    TARGET_USER="root"
+  fi
+fi
+
+# Resolve UID and home directory for target user
+if ! TARGET_UID="$(id -u "$TARGET_USER" 2>/dev/null)"; then
+  echo "Cannot determine UID for user: $TARGET_USER" >&2
+  exit 1
+fi
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6 || true)"
+if [[ -z "$TARGET_HOME" ]]; then
+  # fallback
+  TARGET_HOME="$(eval echo ~${TARGET_USER})"
+fi
+
 if [[ -z "$MODE" ]]; then
   if [[ $(id -u) -eq 0 ]]; then
     MODE=system
@@ -55,8 +80,8 @@ if [[ ! -f "$UNIT_SRC" ]]; then
 fi
 
 render_unit() {
-  # Replace %i with username in a safe way
-  sed "s|%i|${CURRENT_USER}|g" "$UNIT_SRC"
+  # Replace %i with the target username in a safe way
+  sed "s|%i|${TARGET_USER}|g" "$UNIT_SRC"
 }
 
 if [[ "$MODE" == "system" ]]; then
@@ -77,18 +102,51 @@ if [[ "$MODE" == "system" ]]; then
   fi
 else
   # user mode
-  DEST_DIR="$HOME/.config/systemd/user"
+  # user mode
+  DEST_DIR="$TARGET_HOME/.config/systemd/user"
   mkdir -p "$DEST_DIR"
-  DEST_PATH="$DEST_DIR/tuffybot@${CURRENT_USER}.service"
+  DEST_PATH="$DEST_DIR/tuffybot@${TARGET_USER}.service"
   echo "Installing user unit to $DEST_PATH"
-  render_unit > "$DEST_PATH"
-  # ensure user daemon aware
-  systemctl --user daemon-reload
-  if $ENABLE; then
-    systemctl --user enable "tuffybot@${CURRENT_USER}.service"
+
+  # Write the unit file. If we're root installing to another user's home,
+  # write the file as that user so ownership/permissions are correct.
+  if [[ $(id -u) -eq 0 && "$TARGET_USER" != "$CURRENT_USER" ]]; then
+    sed "s|%i|${TARGET_USER}|g" "$UNIT_SRC" | sudo -u "$TARGET_USER" tee "$DEST_PATH" >/dev/null
+  else
+    render_unit > "$DEST_PATH"
   fi
-  if $START; then
-    systemctl --user start "tuffybot@${CURRENT_USER}.service"
+
+  # Ensure XDG_RUNTIME_DIR is set so systemctl --user can talk to the user bus.
+  # Prefer an existing /run/user/<uid> if available.
+  if [[ -z "${XDG_RUNTIME_DIR:-}" && -d "/run/user/$TARGET_UID" ]]; then
+    export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
+  fi
+
+  # Invoke systemctl --user as the target user when necessary. When running as
+  # root for another user, use sudo -u and pass XDG_RUNTIME_DIR so systemctl
+  # can connect to the per-user bus.
+  if [[ $(id -u) -eq 0 && "$TARGET_USER" != "$CURRENT_USER" ]]; then
+    if [[ -d "/run/user/$TARGET_UID" ]]; then
+      sudo -u "$TARGET_USER" XDG_RUNTIME_DIR="/run/user/$TARGET_UID" systemctl --user daemon-reload
+      if $ENABLE; then
+        sudo -u "$TARGET_USER" XDG_RUNTIME_DIR="/run/user/$TARGET_UID" systemctl --user enable "tuffybot@${TARGET_USER}.service"
+      fi
+      if $START; then
+        sudo -u "$TARGET_USER" XDG_RUNTIME_DIR="/run/user/$TARGET_UID" systemctl --user start "tuffybot@${TARGET_USER}.service"
+      fi
+    else
+      echo "Warning: /run/user/$TARGET_UID not found; cannot contact user bus for $TARGET_USER." >&2
+      echo "You may need to run this as $TARGET_USER while they are logged in to enable/start the unit." >&2
+    fi
+  else
+    # normal non-root path: current user is the target user
+    systemctl --user daemon-reload
+    if $ENABLE; then
+      systemctl --user enable "tuffybot@${TARGET_USER}.service"
+    fi
+    if $START; then
+      systemctl --user start "tuffybot@${TARGET_USER}.service"
+    fi
   fi
 fi
 
