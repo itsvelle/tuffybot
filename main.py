@@ -47,13 +47,9 @@ class TuffyBot(commands.Bot):
         for command in cog.__cog_app_commands__:
             if isinstance(command, app_commands.Command):
                 # Only apply if not already set
-                if (
-                    not hasattr(command, "_allowed_contexts")
-                    or command._allowed_contexts is None
-                ):
-                    command.allowed_contexts = app_commands.AppCommandContext(
-                        guild=True, dm_channel=True, private_channel=True
-                    )
+                command.allowed_contexts = app_commands.AppCommandContext(
+                    guild=True, dm_channel=True, private_channel=True
+                )
 
         # Call the parent add_cog method
         await super().add_cog(cog, override=override)
